@@ -29,7 +29,10 @@ class FFDecksSquareParser:
 
         self._extra_ffdecks_keys = ['datastore_id']
 
-        self.output_cards = []
+        self.output_cards = {
+            "cards": []
+        }
+
 
     @staticmethod
     def format_markup(string):
@@ -271,7 +274,7 @@ class FFDecksSquareParser:
                         else:
                             card_cursor[key_map[1]] = self.format_markup(card[key])
 
-            self.output_cards.append(card_cursor)
+            self.output_cards['cards'].append(card_cursor)
 
 
 card_client = FFDecksSquareParser()
