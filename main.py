@@ -24,19 +24,25 @@ class FFDecksSquareParser:
             ('Ex_Burst', 'is_ex_burst'),
             ('Element', 'element'),
             ('Category_1', 'category'),
-            ('images', 'images'),
+            ('images', 'square_images')
         ]
 
         self._extra_ffdecks_keys = ['datastore_id']
 
         self.output_cards = []
 
-    def format_markup(self, string):
+    @staticmethod
+    def format_markup(string):
 
         # Weird issue with opus 13 summons
         # 13-012R
         # [[ex]][[br]]   EX BURST[[/]] -> [[br]][[ex]]EX BURST[[/]]
         string = re.sub(r'\[\[ex]]\[\[br]]\s*EX BURST\[\[/]]', '[[br]][[ex]]EX BURST[[/]]', string)
+
+        # Weird issue where sometimes we have [[b]] [[/]] tags with nothing in them
+        # 16-124H
+        # [[b]] [[/]] -> ''
+        string = re.sub(r'\[\[[bi]]]\s*\[\[/]]', ' ', string)
 
         # Weird issue where sometimes we have ex brackets that don't make sense
         # 4-130H
@@ -52,6 +58,11 @@ class FFDecksSquareParser:
         # [[br]]\s\s  -> [[br]]
         string = re.sub(r'(\[\[br]])(\s*)', r'\1', string)
 
+        # Some times we see [[i]]Job[[/]] [[i]]Member of the Turks[[/]]
+        # This is technically not wrong, but lets clean it up
+        # [[i]]Job[[/]] [[i]]Member of the Turks[[/]] -> [[i]]Job Member of the Turks[[/]]
+        string = re.sub(r'(\s*)(\[\[i]])(Job)(\[\[/]])(\s*)(\[\[i]])(.*?)(\[\[/]])(\s*)', r'\2\3\5\7\8', string)
+
         # Remove extra spaces on the ends of stuff inside brackets
         # [[s]]Grand Delta [[/]] -> [[s]]Grand Delta[[/]]
         # This should be the last thing we do before proceeding with markdown replacements
@@ -62,15 +73,24 @@ class FFDecksSquareParser:
 
         # Italics
         # [[i]]stuff[[/]] -> ~stuff~
-        string = re.sub(r'(\[\[i]])(.*?)(\s*\[\[/]])(\s*)', r'~\2~ ', string)
+        # if re.search("Cherry Blossom", string):
+        #     print('done')
+        allowed_to_be_italics_regex = ['Job', "Card Name", 'Damage', 'Warp', 'Category', 'Card name', 'Ability Name']
+        for expression in allowed_to_be_italics_regex:
+            r = re.compile(fr'(\s*)(\[\[i]])({expression})(.*?)(\[\[/]])(\s*)')
+            if expression in ['Damage', 'Warp']:
+                string = re.sub(r, r'~\3\4~ ', string)
+            else:
+                string = re.sub(r, r' ~\3\4~ ', string)
 
         # Special Orange
         # [[s]]Angelo Cannon[[/]]
-        string = re.sub(r'(\[\[s]])(.*?)(\s*\[\[\/]])(\s*)', r'%\2% ', string)
+        string = re.sub(r'(\[\[s]])(\s*)(.*?)(\s*\[\[/]])(\s*)', r'%\3% ', string)
 
         # EX Burst logo
         # [[ex]]EX BURST[[/]]
         string = re.sub(r'(\[\[ex]])(.*?)(\[\[/]])(\s*)', '{x} ', string)
+        string = string.replace('EX BURST', '{x}')
 
         # Damage/Warp dash
         # -- -> ―
@@ -122,10 +142,32 @@ class FFDecksSquareParser:
 
         # Amidot
         string = string.replace('&middot;', u"\u00B7")
+        string = re.sub(r'\s*u"\u00B7"\s*', '', string)
+
+        # Weird issue where some cards have a [[br]] in the middle of italic tags
+        # 4-055H
+        # ~Card Name [[br]] Raya-O-Senna~ -> ~Card Name Raya-O-Senna~
+        r = re.compile(r'~.*?~')
+        matches = re.findall(r, string)
+
+        for match in matches:
+            if '[[br]]' in match:
+                replacement_string = re.sub(r'\[\[br]]', '', match)
+                string = string.replace(match, replacement_string)
+
+        # Rest of [[i]] and [[/]] are errant, so we remove them
+        string = re.sub(r'(\[\[i]]|\[\[/]])', '', string)
+
+        # Minor fixes
+        # ~Whatever~ , -> ~Whatever~,
+        string = string.replace("~ ,", "~,")
+        string = string.replace("~ .", "~.")
+        string = string.replace("~ :", "~:")
 
         return string
 
-    def element_to_word(self, string):
+    @staticmethod
+    def element_to_word(string):
         # Replace Element Logos
         string = string.replace(u"\u571F", 'Earth')
         string = string.replace(u"\u6c34", 'Water')
@@ -142,8 +184,7 @@ class FFDecksSquareParser:
 
         # for card in [x for x in self.card_list if x['Code'] == "8-066C/3-071H"]:
         for card in self.card_list:
-            card_cursor = {}  # Build our card as we go
-            card_cursor['octgn_id'] = str(uuid.uuid4())
+            card_cursor = {'octgn_id': str(uuid.uuid4())}  # Build our card as we go
             for key in card.keys():  # Iterate through cards keys to compare to what we want
 
                 for key_map in self._square_to_ffdecks_keys:  # Iterate through our key_map
@@ -185,7 +226,7 @@ class FFDecksSquareParser:
                                 card_cursor[key_map[1]] = card[key][:-1]
                             elif re.search(r'/', card[key]):
                                 r = re.compile(
-                                    r"^(.*?)([A-Z])(\/)(.*)")  # Reprint logic only grab first (6-006C)/1-011C
+                                    r"^(.*?)([A-Z])(/)(.*)")  # Reprint logic only grab first (6-006C)/1-011C
                                 card_cursor[key_map[1]] = re.search(r, card[key]).group(
                                     1)  # and strip letter output (6-006)
                             else:
@@ -208,6 +249,20 @@ class FFDecksSquareParser:
 
                         elif key == "images":
                             card_cursor[key_map[1]] = card[key]
+
+                        elif key == "Category_1":
+                            # Issue with break in Category_1
+                            # 14-001C
+                            # We just strip [[br]] if found in Category_1
+                            category = card[key].replace('[[br]]', '')
+                            category = self.format_markup(category)
+
+                            # Issue where somtimes we have <space><amidot><space>$
+                            # We remove the trailing amidot if we encounter this
+                            # 15-132S
+                            category = re.sub(r'\s*\u00B7\s*$', '', category)
+
+                            card_cursor[key_map[1]] = category
 
                         else:
                             card_cursor[key_map[1]] = self.format_markup(card[key])
