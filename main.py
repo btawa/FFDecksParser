@@ -24,7 +24,7 @@ class FFDecksSquareParser:
             ('Ex_Burst', 'is_ex_burst'),
             ('Element', 'element'),
             ('Category_1', 'category'),
-            ('images', 'square_images')
+            ('images', 'image')
         ]
 
         self._extra_ffdecks_keys = ['datastore_id']
@@ -248,7 +248,11 @@ class FFDecksSquareParser:
                                                            card[key].split('/')]
 
                         elif key == "images":
-                            card_cursor[key_map[1]] = card[key]
+                            # This doesn't seem to be consistent in ffdecks
+                            # Seems like last few sets are stored in "https://storage.googleapis.com/ffdecks-card-images/
+                            root_url = "https://storage.googleapis.com/ffdecks-card-images/"
+                            file_name = f'{card["Code"]}_eg.jpg'
+                            card_cursor[key_map[1]] = root_url + file_name
 
                         elif key == "Category_1":
                             # Issue with break in Category_1
