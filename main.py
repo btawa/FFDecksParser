@@ -280,5 +280,4 @@ class FFDecksSquareParser:
 card_client = FFDecksSquareParser()
 card_client.MakeOutputCardList()
 
-with open('cards.json', 'w') as outfile:
-    json.dump(card_client.output_cards, outfile)
+print(json.dumps(card_client.output_cards))
