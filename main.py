@@ -97,7 +97,12 @@ class FFDecksSquareParser:
 
         # Damage/Warp dash
         # -- -> ―
-        string = re.sub(r'(Damage|Warp)(.*?)(\s*--)(\s*)', r'\1\2―', string)
+        #string = re.sub(r'(~)(Damage|Warp)(.*?)(\s*--)(\s*)', r'\1\2\3―', string)
+
+        def evaluate():
+            return r'\1\2\3~ ' + u"\u2015"
+
+        string = re.sub(r'(\~)(Damage|Warp)(\s+\d+)(\s*--)(\s*\~)', evaluate(), string)
 
         # Brackets
         string = string.replace(u"\u300a", '{')
@@ -123,7 +128,7 @@ class FFDecksSquareParser:
         string = string.replace(u"\uFF18", '{8}')
         string = string.replace(u"\uFF19", '{9}')
         string = string.replace(u"\uFF10", '{0}')
-        string = string.replace(u"\u2015", "-")  # Damage 5 from Opus X cards
+        #string = string.replace(u"\u2015", "-")  # Damage 5 from Opus X cards
         string = string.replace(u"\u00fa", "u")  # Cuchulainn u with tilda
 
         # Kanji elements to ffdecks
