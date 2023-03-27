@@ -285,16 +285,15 @@ class FFDecksSquareParser:
                             # We remove the trailing amidot if we encounter this
                             # 15-132S
 
-                            isMultiCategory = category.find('\s*\u00B7\s*$') > -1 or category.find('\s*\u00b7\s*$');
+                            # 10-051C has a case sensitive issue where the unicode is \u00b7 instead of \u00B7
+                            isMultiCategory = re.search(' \u00B7 ', category, re.IGNORECASE);
 
                             if (isMultiCategory):
-                                categories = category.split(' \u00B7 ');
+                                categories = re.split(' \u00B7 ', category, flags=re.IGNORECASE);
                                 card_cursor[key_map[1]] = categories[0];
+                                card_cursor['category2'] = categories[1];
                             else:
                                 card_cursor[key_map[1]] = category
-                            
-                            
-
                         else:
                             card_cursor[key_map[1]] = self.format_markup(card[key])
 
