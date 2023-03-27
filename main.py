@@ -3,15 +3,9 @@ import json
 import re
 import uuid
 
+class FFDecksAdapter:
 
-class FFDecksSquareParser:
-
-    def __init__(self):
-        self.square_url = 'https://fftcg.square-enix-games.com/en/get-cards'
-        self.square_data = requests.get(self.square_url).text
-        self.card_list = json.loads(self.square_data)['cards']
-
-        self._square_to_ffdecks_keys = [
+    keys = [
             ('Name_EN', 'name'),
             ('Power', 'power'),
             ('Rarity', 'rarity'),
@@ -26,8 +20,36 @@ class FFDecksSquareParser:
             ('Category_1', 'category'),
             ('images', 'image')
         ]
+    
+    extra_keys = ['datastore_id']
 
-        self._extra_ffdecks_keys = ['datastore_id']
+    rarity_keys = {
+        "C": "Common",
+        "H": "Hero",
+        "L": "Legend",
+        "PR": "Promo",
+        "R": "Rare",
+        "S": "Starter",
+        "B": "Boss",
+    }
+
+    storage_base_url = "https://storage.googleapis.com/ffdecks-card-images/"
+
+    def __init__(self) -> None:
+        pass
+
+
+class FFDecksSquareParser:
+
+
+    def __init__(self, adapter):
+        self.adapter = adapter
+        self.square_url = 'https://fftcg.square-enix-games.com/en/get-cards'
+        self.square_data = requests.get(self.square_url).text
+        self.card_list = json.loads(self.square_data)['cards']
+
+        self._square_to_ffdecks_keys = adapter.keys
+        self._extra_ffdecks_keys = adapter.extra_keys
 
         self.output_cards = {
             "cards": []
@@ -214,16 +236,7 @@ class FFDecksSquareParser:
                                 card_cursor[key_map[1]] = None
 
                         elif key == "Rarity":
-                            rarities = {
-                                "C": "Common",
-                                "H": "Hero",
-                                "L": "Legend",
-                                "PR": "Promo",
-                                "R": "Rare",
-                                "S": "Starter",
-                                "B": "Boss",
-                            }
-                            card_cursor[key_map[1]] = rarities.get(card[key])
+                            card_cursor[key_map[1]] = self.adapter.rarity_keys.get(card[key])
 
                         elif key == "Text_EN":
                             abilities = self.format_markup(card[key]).split('[[br]]')
@@ -258,9 +271,8 @@ class FFDecksSquareParser:
                         elif key == "images":
                             # This doesn't seem to be consistent in ffdecks
                             # Seems like last few sets are stored in "https://storage.googleapis.com/ffdecks-card-images/
-                            root_url = "https://storage.googleapis.com/ffdecks-card-images/"
                             file_name = f'{card["Code"]}_eg.jpg'
-                            card_cursor[key_map[1]] = root_url + file_name
+                            card_cursor[key_map[1]] = self.adapter.storage_base_url + file_name
 
                         elif key == "Category_1":
                             # Issue with break in Category_1
@@ -272,17 +284,28 @@ class FFDecksSquareParser:
                             # Issue where somtimes we have <space><amidot><space>$
                             # We remove the trailing amidot if we encounter this
                             # 15-132S
-                            category = re.sub(r'\s*\u00B7\s*$', '', category)
 
-                            card_cursor[key_map[1]] = category
+                            isMultiCategory = category.find('\s*\u00B7\s*$') > -1 or category.find('\s*\u00b7\s*$');
+
+                            if (isMultiCategory):
+                                categories = category.split(' \u00B7 ');
+                                card_cursor[key_map[1]] = categories[0];
+                            else:
+                                card_cursor[key_map[1]] = category
+                            
+                            
 
                         else:
                             card_cursor[key_map[1]] = self.format_markup(card[key])
 
             self.output_cards['cards'].append(card_cursor)
 
-
-card_client = FFDecksSquareParser()
+adapter = FFDecksAdapter()
+card_client = FFDecksSquareParser(adapter)
 card_client.MakeOutputCardList()
 
-print(json.dumps(card_client.output_cards))
+print("Cards Found: ", card_client.output_cards.__len__)
+
+saveFile = open('./output.json', 'w')
+# saveFile.write('Test')
+saveFile.write(json.dumps(card_client.output_cards));
